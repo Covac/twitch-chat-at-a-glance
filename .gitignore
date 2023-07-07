@@ -1,0 +1,5 @@
+run.sh
+fly.toml
+__pycache__
+templates/*
+!templates/main.html

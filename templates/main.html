@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Twitch chat at a glance!</title>
+  <style>
+	
+	@import
+	url(https://fonts.googleapis.com/css2?family=Noto+Colr+Emoji+Glyf);
+  
+    body {
+      font-family: Arial, sans-serif, "Noto Colr Emoji Glyf";
+      background-color: #222;
+      color: #fff;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      grid-gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .box {
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      background-color: #333;
+    }
+
+    .box h2 {
+      margin-bottom: 10px;
+      border-bottom: 2px solid #fff;
+      padding-bottom: 5px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+	.dot {
+	height: 25px;
+	width: 25px;
+	background-color: #228B22;
+	float: right;
+	border-radius: 50%;
+	display: inline-block;
+	}
+	
+	.dot.offline{
+	background-color: dimgrey;
+	}
+
+    .subtitle {
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .subtitle ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+	
+	.grid-holder {
+	  display: grid;
+	  grid-template-columns: 1fr 60px;
+	  grid-gap: 10px;
+	  width: 100%;
+	}
+	
+	.grid-child-left {
+	  text-align: left;
+	}
+	
+	.grid-child-right {
+	  text-align: right;
+	}
+
+    .timestamp {
+      font-size: 14px;
+      color: #ccc;
+      text-align: right;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container"></div>
+  <div class="timestamp" id="timestamp"></div>
+  <script>
+	function displayCurrentTime() {
+		const timestampElement = document.getElementById('timestamp');
+		const currentTime = new Date().toLocaleString();
+		timestampElement.innerText = `Last Update: ${currentTime}`;
+	}
+	
+	async function getApiData(){
+		const options = {method: 'GET', mode: 'cors'};
+		const siteURL = window.location.href;
+		const response = await fetch(siteURL+'/api', options);
+		console.log(response)
+		const jsonObject = await response.json();
+		console.log(jsonObject);
+		return jsonObject;
+	}
+	
+	function renderEmotes(element,text,emotes){//We will rendere the whole element here since we cant just add it(it ends up with text)
+		const wordArray = text.split(" ");
+		let messageFragments = [];
+		wordArray.forEach((word) =>{
+			let pushFlag = true;
+			Object.entries(emotes).forEach(([emoteName,emoteUrls]) => {//try later with .every
+				if (word === emoteName){
+					//grab first link
+					if (messageFragments.length > 0){
+						const f = document.createElement("span");
+						messageFragments.push('');
+						f.innerText = messageFragments.join(' ');
+						element.appendChild(f);
+						messageFragments = [];}
+					let emote = new Image();
+					emote.src = emoteUrls[0];
+					emote.alt = emoteName;
+					element.appendChild(emote);
+					messageFragments.push('');
+					pushFlag = false;
+					}
+				else{}//nothing unless we do .every
+			});
+			if (pushFlag){messageFragments.push(word);}
+		});
+		if (messageFragments.length > 0){
+			const f = document.createElement("span");
+			messageFragments.push('');
+			f.innerText = messageFragments.join(' ');//we add empty element to the list to get ending space
+			element.appendChild(f);}
+	}
+
+	function generateSubtitle(container, title, values, meta = null, emotes = null) {
+		const subtitle = document.createElement('div');
+		subtitle.classList.add('subtitle');
+		const subtitleTitle = document.createElement('h3');
+		subtitleTitle.innerText = title;
+		subtitle.appendChild(subtitleTitle);
+		const subtitleList = document.createElement('ul');
+		values.forEach((value,index) => {
+			const item = document.createElement('li');
+			if (meta === null){
+				if (emotes === null){item.innerText = value;}
+				else{renderEmotes(item,value,emotes);}}
+			else{//item.innerText = `${value} ${flavourBefore} ${meta[index]} ${flavourAfter}`;
+				const expandedItem = document.createElement('div');
+				const valueHolder = document.createElement('div');
+				const metaHolder = document.createElement('div');
+				expandedItem.classList.add('grid-holder');
+				valueHolder.classList.add('grid-child-left');
+				if (emotes === null){valueHolder.innerText = value;}
+				else{renderEmotes(valueHolder,value,emotes);}
+				metaHolder.classList.add('grid-child-right');
+				metaHolder.innerText = meta[index];
+				expandedItem.appendChild(valueHolder);
+				expandedItem.appendChild(metaHolder);
+				item.appendChild(expandedItem);
+				}
+			subtitleList.appendChild(item);
+		});
+		subtitle.appendChild(subtitleList);
+		container.appendChild(subtitle);
+	}
+	
+	function updateTarget(target){
+		const prepareChildren = [];
+		getApiData().then((json) => {
+		const emoteData = json.emotes;
+		console.log(emoteData);
+		json.channels.forEach((channel) =>{
+		Object.entries(channel).forEach(([channelName,channelData]) => {
+		//Runs for each box
+		const box = document.createElement('div');
+		box.classList.add('box');
+		const title = document.createElement('h2');
+		title.innerText = `${channelName}`;
+		const isLive = document.createElement('span');
+		isLive.classList.add('dot');
+		if (channelData.live === 'OFFLINE'){isLive.classList.add('offline');}
+		title.appendChild(isLive);
+		box.appendChild(title);
+		if (channelData.status === 'GOOD'){
+
+			const topics = [];
+			const topicsMeta = [];
+			channelData.topics.forEach((topic) => {
+				topics.push(topic.topic);
+				topicsMeta.push(topic.times_used);});
+			generateSubtitle(box, 'Topics', topics ,topicsMeta, emoteData);
+
+			const interestingMessages = [];
+			channelData.top_sentences.forEach((topS) => {
+				interestingMessages.push(topS);});
+			generateSubtitle(box, 'Most Interesting Messages', interestingMessages, null, emoteData);
+
+			const spammedMessages = [];
+			const spammedMessagesMeta = [];
+			channelData.most_spammed_messages.forEach((mostSpammed) => {
+				spammedMessages.push(mostSpammed.message);
+				spammedMessagesMeta.push(mostSpammed.num)});
+			generateSubtitle(box, 'Most Spammed Messages', spammedMessages, spammedMessagesMeta, emoteData);
+
+			const activeChatters = [];
+			const activeChattersMeta = [];
+			channelData.spammers.forEach((spamMessage) => {
+				activeChatters.push(spamMessage.username);
+				activeChattersMeta.push(spamMessage.num);});
+			generateSubtitle(box, 'Most Active Chatters', activeChatters, activeChattersMeta);
+		}else{
+			generateSubtitle(box, 'Status', [channelData.status]);
+		}
+		prepareChildren.push(box);
+		console.log(prepareChildren);
+		});//channelName,channelData loop
+		});//channel loop
+		target.replaceChildren(...prepareChildren);
+		displayCurrentTime();
+		})//Api response
+		}
+
+	const container = document.querySelector('.container');
+	updateTarget(container);
+	setInterval(updateTarget, 30000, container);
+  </script>
+</body>
+</html>

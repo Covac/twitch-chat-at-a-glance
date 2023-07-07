@@ -1,0 +1,6 @@
+twitchio
+requests
+emoji
+nltk
+Pattern
+quart
