@@ -3,6 +3,7 @@ import requests
 import asyncio
 import json
 import emoji
+import gc
 from time import sleep
 from collections import OrderedDict
 
@@ -43,6 +44,10 @@ async def api():
 async def font(path):
     return await send_from_directory('static', path)"""
 
+@app.route("/images/<path:path>")
+async def pin(path):
+    return await send_from_directory('static', path)
+
 @app.route("/api/data")
 async def data_api():
     return DATA, 200, {"Content-Type":"application/json"}
@@ -76,9 +81,10 @@ class Bot(commands.Bot):#myself
         # prefix can be a callable, which returns a list of strings or a string...
         # initial_channels can also be a callable which returns a list of strings...
         self.cnt = 0
-        super().__init__(token=config.BotConfig.SECRET_KEY, prefix='!', initial_channels=['forsen','xqc','nymn','pokelawls','moonmoon','sodapoppin','hasanabi','cohh'])#'covac123','nymn','xqc','forsen','moonmoon','pokelawls','hasanabi','sodapoppin'
+        super().__init__(token=config.BotConfig.SECRET_KEY, prefix='!', initial_channels=['forsen','xqc','nymn','pokelawls','moonmoon','sodapoppin','hasanabi','39daph'])#'covac123','nymn','xqc','forsen','moonmoon','pokelawls','hasanabi','sodapoppin'
         self.ClientID = config.BotConfig.CLIENT_ID
         self.AccessToken = config.BotConfig.SECRET_KEY
+        self.WURL = config.BotConfig.WEBHOOK_URL
         self.GlobalAndSubEmotes = []
         self.Channel3rdPartyEmotes = {} #OrderedDict()#hopefully no repeating emotes
         self.EmotesAndLinks = {}#{'EMOTE':{'SIZE':'LINK',}}
@@ -137,6 +143,7 @@ class Bot(commands.Bot):#myself
                 print(f'Starting logs for {channel.name}')
                 self.Tracker[channel.name] = {'logs':[],'chatters':[]}
         self.start()
+        self.send_health_check("Server successfully started!")
 
     def start(self):#and restart
         self.GlobalAndSubEmotes = []
@@ -242,14 +249,17 @@ class Bot(commands.Bot):#myself
                     self.EmotesAndLinks[emote['name']] = urlList.copy()
 
         if response.status_code == 200:#i want it to look nice so i will just repeat it :))))
-            for emote in seventv_emotes['emote_set']['emotes']:
-                #seems they
-                self.Channel3rdPartyEmotes[USERNAME].append(emote['name'])
-                links = []
-                host = 'https:' + emote['data']['host']['url'] + '/'
-                for file in emote['data']['host']['files']:
-                    links.append(host+file['name'])
-                self.EmotesAndLinks[emote['name']] = links.copy()#references can go fts
+            try:
+                for emote in seventv_emotes['emote_set']['emotes']:
+                    #seems they
+                    self.Channel3rdPartyEmotes[USERNAME].append(emote['name'])
+                    links = []
+                    host = 'https:' + emote['data']['host']['url'] + '/'
+                    for file in emote['data']['host']['files']:
+                        links.append(host+file['name'])
+                    self.EmotesAndLinks[emote['name']] = links.copy()#references can go fts
+            except:
+                print(f"{USERNAME} has no 7TV emotes!")#probably had emotes before but has none now?
                 
         print(f"Added 3rd party emotes for: {USERNAME} with id {USERID}")
 
@@ -320,7 +330,7 @@ class Bot(commands.Bot):#myself
         newcontent = ' '.join(newcontent)
         return newcontent
 
-    def InformationExtraction(self,chat_messages):
+    def InformationExtraction(self,chat_messages):#sometimes it can fail when there are exclusively emotes in chat
         #Vectorize using tf-idf
         lsa = TruncatedSVD(n_components=2,algorithm='arpack')#from docs: SVD suffers from a problem called “sign indeterminacy”, which means the sign of the components_ and the output from transform depend on the algorithm and random state. To work around this, fit instances of this class to data once, then keep the instance around to do transformations.
         try:
@@ -331,8 +341,13 @@ class Bot(commands.Bot):#myself
             top_indices = np.argsort(X_lsa.sum(axis=1))[:-6:-1]
             top_sentences = [chat_messages[i] for i in top_indices]
             return top_sentences
-        except:
-            print("Failed, don't know why yet. How many messages were there? ",len(chat_messages))
+        except Exception as e:
+            import traceback
+            print(f"Information Extraction failed with {len(chat_messages)}")
+            t = traceback.format_exc()
+            print(t)
+            self.send_health_check(t)
+            return []#Better than NoneType
 
     def RelevantEmotes(self,messages):
         relevant_emotes = {}
@@ -343,6 +358,12 @@ class Bot(commands.Bot):#myself
                         relevant_emotes[emote] = urls
                         break           
         return relevant_emotes
+
+    def send_health_check(self,msg):
+        hc = {
+            'content':msg,
+            'username':'twitch-at-a-glance health'}
+        requests.post(self.WURL,json=hc)
 
     async def refresh_emotes_task(self,sch):
         while True:
@@ -378,10 +399,14 @@ class Bot(commands.Bot):#myself
                         only_relevant_messages.append(top)
 
                     #prepare, preprocess before constructing
-                    top_sentences =  self.InformationExtraction(messages)
+                    top_sentences = self.InformationExtraction(messages)
+                    only_relevant_messages.extend(top_sentences)
+
+                        
+                        
                     most_spammed_messages = sorted(data['logs'], key=itemgetter('num'), reverse=True)[:5]
                     #We already have topics
-                    only_relevant_messages.extend(top_sentences)
+                    
                     only_relevant_messages.extend([m["message"] for m in most_spammed_messages])
                     
                     #Let's construct our json. Yolo with references
@@ -415,6 +440,7 @@ class Bot(commands.Bot):#myself
         self.Condensed['emotes'] = {}
         for ch,data in self.Tracker.items():
             self.Tracker[ch] = {'logs':[],'chatters':[]}
+        gc.collect()
         print("Cleanup done!")
     
         

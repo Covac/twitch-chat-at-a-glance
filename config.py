@@ -14,3 +14,4 @@ class Development(ServerConfig):
 class BotConfig:
     SECRET_KEY = os.getenv("SECRET")
     CLIENT_ID = os.getenv("CLIENT_ID")
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")

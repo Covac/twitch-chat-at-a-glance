@@ -3,3 +3,4 @@ fly.toml
 __pycache__
 templates/*
 !templates/main.html
+static/*.ttf

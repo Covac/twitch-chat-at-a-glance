@@ -38,18 +38,38 @@
       font-weight: bold;
       color: #fff;
     }
+	
+	.pin-button {
+	  width: 28px;
+	  height: 28px;
+	  float: right;
+	  padding: 0px 0px;
+	  border-width: 0px;
+	  margin: 0px 10px;
+	  background-color: inherit;
+	  transition-duration: 0.4s;
+	}
+	
+	.pin-button:hover {
+	  background-color: grey;
+	}
+	
+	.pin-img {
+	  width: 25px;
+	  height: 25px;
+	}
 
 	.dot {
-	height: 25px;
-	width: 25px;
-	background-color: #228B22;
-	float: right;
-	border-radius: 50%;
-	display: inline-block;
+	  height: 25px;
+	  width: 25px;
+	  background-color: #228B22;
+	  float: right;
+	  border-radius: 50%;
+	  display: inline-block;
 	}
 	
 	.dot.offline{
-	background-color: dimgrey;
+	  background-color: dimgrey;
 	}
 
     .subtitle {
@@ -102,18 +122,18 @@
 		const options = {method: 'GET', mode: 'cors'};
 		const siteURL = window.location.href;
 		const response = await fetch(siteURL+'/api', options);
-		console.log(response)
+		//console.log(response)
 		const jsonObject = await response.json();
-		console.log(jsonObject);
+		//console.log(jsonObject);
 		return jsonObject;
 	}
 	
-	function renderEmotes(element,text,emotes){//We will rendere the whole element here since we cant just add it(it ends up with text)
+	function renderEmotes(element,text,emotes){
 		const wordArray = text.split(" ");
 		let messageFragments = [];
 		wordArray.forEach((word) =>{
 			let pushFlag = true;
-			Object.entries(emotes).forEach(([emoteName,emoteUrls]) => {//try later with .every
+			Object.entries(emotes).forEach(([emoteName,emoteUrls]) => {
 				if (word === emoteName){
 					//grab first link
 					if (messageFragments.length > 0){
@@ -152,7 +172,7 @@
 			if (meta === null){
 				if (emotes === null){item.innerText = value;}
 				else{renderEmotes(item,value,emotes);}}
-			else{//item.innerText = `${value} ${flavourBefore} ${meta[index]} ${flavourAfter}`;
+			else{
 				const expandedItem = document.createElement('div');
 				const valueHolder = document.createElement('div');
 				const metaHolder = document.createElement('div');
@@ -176,18 +196,47 @@
 		const prepareChildren = [];
 		getApiData().then((json) => {
 		const emoteData = json.emotes;
-		console.log(emoteData);
+		//console.log(emoteData);
 		json.channels.forEach((channel) =>{
 		Object.entries(channel).forEach(([channelName,channelData]) => {
 		//Runs for each box
 		const box = document.createElement('div');
+		box.setAttribute('id', `${channelName}`)//for focusing
 		box.classList.add('box');
 		const title = document.createElement('h2');
 		title.innerText = `${channelName}`;
+		
 		const isLive = document.createElement('span');
 		isLive.classList.add('dot');
 		if (channelData.live === 'OFFLINE'){isLive.classList.add('offline');}
 		title.appendChild(isLive);
+		
+		const pinButton = document.createElement('button');
+		const pinImage = document.createElement('img');
+		pinImage.src = "/images/Pin.png";
+		pinImage.classList.add('pin-img');
+		pinButton.classList.add('pin-button');
+		pinButton.appendChild(pinImage);
+		pinButton.addEventListener("click", function(e){//try without E
+			if (focused === null){
+				focused = channelName;
+				this.style.backgroundColor = focusedColor;
+			}
+			else if (focused === channelName){
+				focused = null;
+				this.style.backgroundColor = "inherit";
+			}
+			else {
+				document.getElementById(focused).firstChild.lastChild.style.backgroundColor = "inherit";//turn off other button
+				focused = channelName;
+				this.style.backgroundColor = focusedColor;
+			}
+
+		});
+		if (focused === channelName){pinButton.style.backgroundColor = focusedColor;}//re-painting since we are re-rendering.
+		title.appendChild(pinButton);
+		
+
 		box.appendChild(title);
 		if (channelData.status === 'GOOD'){
 
@@ -220,14 +269,16 @@
 			generateSubtitle(box, 'Status', [channelData.status]);
 		}
 		prepareChildren.push(box);
-		console.log(prepareChildren);
+		//console.log(prepareChildren);
 		});//channelName,channelData loop
 		});//channel loop
 		target.replaceChildren(...prepareChildren);
 		displayCurrentTime();
 		})//Api response
+		if (focused !== null){document.getElementById(focused).scrollIntoView({behavior: "smooth", block: "start", inline: "nearest"});}//from docs: "The element may not be scrolled completely to the top or bottom depending on the layout of other elements."
 		}
-
+	let focused = null;
+	const focusedColor = "darkmagenta"
 	const container = document.querySelector('.container');
 	updateTarget(container);
 	setInterval(updateTarget, 30000, container);
